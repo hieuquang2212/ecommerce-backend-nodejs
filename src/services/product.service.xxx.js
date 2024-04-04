@@ -2,7 +2,8 @@
 
 const { BadRequestError } = require('../core/error.response');
 const { product, clothing, electronic, furniture } = require('../models/product.model');
-const { findAllDraftsForShop , findAllPublishForShop, publishProductByShop, unPublishProductByShop, searchProductByUser, findAllProducts, findProduct } = require('../models/repositories/product.repo');
+const { insertInventory } = require('../models/repositories/inventory.repo');
+const { findAllDraftsForShop, findAllPublishForShop, publishProductByShop, unPublishProductByShop, searchProductByUser, findAllProducts, findProduct } = require('../models/repositories/product.repo');
 
 // define factory class to create product
 
@@ -47,12 +48,12 @@ class ProductFactory {
     // END PUT //
 
     static async findAllDraftsForShop({ product_shop, limit = 50, skip = 0 }) {
-        console.log({ product_shop});
+        console.log({ product_shop });
         const query = { product_shop, isDraft: true };
         return await findAllDraftsForShop({ query, limit, skip });
     }
 
-    static async findAllPublishForShop({ product_shop, limit = 50, skip = 0}) {
+    static async findAllPublishForShop({ product_shop, limit = 50, skip = 0 }) {
         console.log('publish');
         const query = { product_shop, isPublish: true };
         return await findAllPublishForShop({ query, limit, skip });
@@ -61,7 +62,7 @@ class ProductFactory {
     static async getListSearchProduct({ keySearch }) {
         return await searchProductByUser({ keySearch });
     }
-    
+
     static async findAllProducts({ limit = 50, sort = 'ctime', page = 1, filter = { isPublish: true } }) {
         return await findAllProducts({ limit, sort, filter, page, select: ['product_name', 'product_price', 'product_thumb'] });
     }
@@ -106,7 +107,17 @@ class Product {
 
     // create new product
     async createProduct(product_id) {
-        return await product.create({...this, _id: product_id });
+        const newProduct = await product.create({ ...this, _id: product_id });
+        if (newProduct) {
+            // add product_stock in inventory
+            await insertInventory({
+                productId: newProduct._id,
+                shopId: this.product_shop,
+                stock: this.product_quantity
+            })
+        }
+
+        return newProduct;
     }
 }
 
@@ -117,7 +128,7 @@ class Clothing extends Product {
             ...this.product_attributes,
             product_shop: this.product_shop
         });
-        console.log({ newClothing});
+        console.log({ newClothing });
         if (!newClothing) throw new BadRequestError('create new clothing error');
 
         const newProduct = await super.createProduct(newClothing._id);
